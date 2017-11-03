@@ -163,6 +163,13 @@ AC_SUBST(GNOME_LIBS)
 AC_SUBST(INSTALL_GNOME)
 AC_SUBST(UNINSTALL_GNOME)
 
+AC_MSG_CHECKING([Zstd libraries])
+AC_CHECK_LIB(zstd, ZSTD_decompressDCtx, [], [
+   AC_MSG_ERROR([no zstd])
+])
+AC_MSG_RESULT(yes)
+LIBS="$LIBS -lzstd"
+
 dnl Checks for programs
 AC_PROG_CC
 WERROR_CFLAGS=""
