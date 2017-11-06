@@ -254,9 +254,14 @@ static int dcc_parse_options(const char **psrc,
             host->compr = DCC_COMPRESS_LZO1X;
             p += 3;
         } else if (str_startswith("zstd", p)) {
-            rs_trace("got ZSTD option");
+#ifdef HAVE_ZSTD
+            rs_trace("got Zstd option");
             host->compr = DCC_COMPRESS_ZSTD;
             p += 4;
+#else
+            rs_log_error("Zstd support not built: %s", started);
+            return EXIT_BAD_HOSTSPEC;
+#endif
         } else if (str_startswith("down", p)) {
             /* if "hostid,down", mark it down, and strip down from hostname */
             host->is_up = 0;
