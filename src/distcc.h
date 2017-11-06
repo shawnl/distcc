@@ -246,6 +246,7 @@ int dcc_compress_lzo1x_alloc(const char *in_buf,
                             size_t *out_len_ret);
 
 
+#ifdef HAVE_ZSTD
 /* compress-zstd.c */
 int dcc_r_bulk_zstd(int outf_fd,
                       int in_fd,
@@ -262,6 +263,7 @@ int dcc_compress_zstd_alloc(const char *in_buf,
                             size_t in_len,
                             char **out_buf_ret,
                             size_t *out_len_ret);
+#endif
 
 /* bulk.c */
 void dcc_calc_rate(off_t size_out,

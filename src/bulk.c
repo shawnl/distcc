@@ -152,7 +152,9 @@ static int dcc_x_file_compressed(int out_fd,
             if ((ret = dcc_compress_file_lzo1x(in_fd, in_len, 
                                                &out_buf, &out_len)))
                 goto out;
-        } else if (compression == DCC_COMPRESS_ZSTD) {
+        }
+#ifdef HAVE_ZSTD
+          else if (compression == DCC_COMPRESS_ZSTD) {
             if ((ret = dcc_compress_file_zstd(in_fd, in_len, 
                                                &out_buf, &out_len)))
                 goto out;
@@ -162,6 +164,7 @@ static int dcc_x_file_compressed(int out_fd,
             if ((ret = dcc_x_token_2int(out_fd, token, out_len, in_len)))
                 goto out;
         } else
+#endif
             if ((ret = dcc_x_token_int(out_fd, token, out_len)))
                 goto out;
 

@@ -70,7 +70,13 @@ int dcc_r_bulk(int ofd,
     } else if (compression == DCC_COMPRESS_LZO1X) {
         return dcc_r_bulk_lzo1x(ofd, ifd, f_size);
     } else if (compression == DCC_COMPRESS_ZSTD) {
+#ifdef HAVE_ZSTD
         return dcc_r_bulk_zstd(ofd, ifd, f_size, f_size_uncompr);
+#else
+        rs_log_error("Zstd compression not included in this build");
+        f_size_uncompr = f_size_uncompr;/*make gcc shut up*/
+        return ENOTSUP;
+#endif
     } else {
         rs_log_error("impossible compression %d", compression);
         return EXIT_PROTOCOL_ERROR;
