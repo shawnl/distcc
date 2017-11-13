@@ -37,7 +37,7 @@
 #  include <sys/mman.h>
 #endif
 #include <zstd.h>
-// zstd hasn't always shipped zstd_errors.h
+// zstd hasn't always shipped with <zstd_errors.h>
 #define ZSTD_error_dstSize_tooSmall 70
 
 #include <netinet/in.h>
@@ -216,6 +216,8 @@ try_again_with_a_bigger_buffer:
         ret = dcc_writex(out_fd, out_buf, out_len);
 
         goto out;
+        // #include <zstd_errors.h>
+        // ZSTD_getErrorCode(out_len) == ZSTD_error_dstSize_tooSmall
     } else if ((ssize_t)out_len == -ZSTD_error_dstSize_tooSmall) {
         free(out_buf);
         out_buf = 0;
