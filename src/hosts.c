@@ -467,7 +467,7 @@ int dcc_get_protover_from_features(enum dcc_compress compr,
     }
 
     if (compr == DCC_COMPRESS_ZSTD && cpp_where == DCC_CPP_ON_CLIENT) {
-        *protover = DCC_VER_2_1;
+        *protover = DCC_VER_4;
     }
 
     if (compr == DCC_COMPRESS_NONE && cpp_where == DCC_CPP_ON_SERVER) {
