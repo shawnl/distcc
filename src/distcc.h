@@ -103,7 +103,7 @@ enum dcc_protover {
     DCC_VER_1   = 1,            /**< vanilla */
     DCC_VER_2   = 2,            /**< LZO sprinkles */
     DCC_VER_3   = 3,            /**< server-side cpp */
-    DCC_VER_2_1 = 4,            /**< ZSTD compression */
+    DCC_VER_4   = 4,            /**< ZSTD compression, -gsplit-dwarf. No server-side cpp */
     __DCC_VER_MAX = 5            /**< canary */
 };
 
