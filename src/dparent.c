@@ -74,6 +74,7 @@
 #ifdef HAVE_GSSAPI
 #include "auth.h"
 #endif
+#include "sd-daemon.h"
 
 static void dcc_nofork_parent(int listen_fd) NORETURN;
 static void dcc_detach(void);
@@ -102,8 +103,15 @@ int dcc_standalone_server(void)
     void *avahi = NULL;
 #endif
 
-    if ((ret = dcc_socket_listen(arg_port, &listen_fd, opt_listen_addr)) != 0)
-        return ret;
+    ret = sd_listen_fds(1);
+    if (ret > 1) {
+        rs_log_crit("can only recieve one fd from systemd");
+        return EXIT_BAD_ARGUMENTS;
+    } else if (ret == 1) {
+        listen_fd = SD_LISTEN_FDS_START;
+    } else
+        if ((ret = dcc_socket_listen(arg_port, &listen_fd, opt_listen_addr)) != 0)
+            return ret;
 
     dcc_defer_accept(listen_fd);
 

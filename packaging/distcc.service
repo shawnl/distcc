@@ -1,0 +1,18 @@
+[Unit]
+Description=Distributed C/C++ compiler
+Documentation=man:distccd(1)
+After=network.target
+Requires=distcc.socket
+
+[Service]
+User=distccd
+ExecStart=/usr/bin/distccd --no-detach --daemon --log-stderr --log-level debug \
+--allow 192.168.0.0/16 --allow 10.0.0.0/8 --allow 127.0.0.0/8 --allow 172.16.0.0/12
+PrivateTmp=true
+ProtectHome=true
+PrivateDevices=true
+SystemCallArchitectures=native
+SystemCallFilter=~@clock @cpu-emulation @debug @keyring @module @mount @obsolete @raw-io @reboot @swap
+#Comment these next two lines to allow the service to be run directly (not through socket activateion)
+SystemCallFilter=~@network-io
+SystemCallFilter=accept accept4 setsockopt getsockopt

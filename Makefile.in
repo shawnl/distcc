@@ -192,8 +192,9 @@ dist_extra =							\
 	packaging/RedHat/xinetd.d/distcc \
 	packaging/deb.sh \
 	packaging/rpm.sh \
+	packaging/distcc.service \
+	packaging/distcc.socket \
 	packaging/googlecode_upload.py
-
 
 mkinstalldirs = $(SHELL) $(srcdir)/mkinstalldirs
 man1dir = $(mandir)/man1
@@ -269,6 +270,7 @@ distccd_obj = src/access.o						\
 	src/serve.o src/setuid.o src/srvnet.o src/srvrpc.o src/state.o	\
 	src/stats.o							\
 	src/fix_debug_info.o						\
+	src/sd-daemon.o                                                 \
 	@ZEROCONF_DISTCCD_OBJS@						\
 	@AUTH_DISTCCD_OBJS@						\
 	$(common_obj) @BUILD_POPT@
@@ -344,6 +346,7 @@ SRC =	src/stats.c							\
 	src/dotd.c src/include_server_if.c				\
 	src/emaillog.c							\
 	src/fix_debug_info.c						\
+	src/sd-daemon.c							\
 	src/zeroconf.c src/zeroconf-reg.c src/gcc-id.c
 
 
@@ -369,6 +372,7 @@ HEADERS = src/stats.h							\
 	src/dotd.h src/include_server_if.h				\
 	src/emaillog.h 							\
 	src/va_copy.h 							\
+	src/sd-daemon.h							\
 	src/zeroconf.h
 
 conf_dir = packaging/RedHat/conf
