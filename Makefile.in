@@ -355,7 +355,7 @@ HEADERS = src/stats.h							\
 	src/auth.h							\
 	src/bulk.h							\
 	src/clinet.h src/compile.h					\
-	src/daemon.h							\
+	src/sd-daemon.h							\
 	src/distcc.h src/dopt.h src/exitcode.h				\
 	src/fix_debug_info.h						\
 	src/hosts.h src/implicit.h					\
