@@ -357,7 +357,7 @@ int dcc_r_token_file(int in_fd,
                      enum dcc_compress compr)
 {
     int ret;
-    unsigned i_size, uncompr_size;
+    unsigned i_size, uncompr_size = 0;
 
     if (compr == DCC_COMPRESS_ZSTD) {
         /* Protocol version 2.1 (4 in wireshark) */
