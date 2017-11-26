@@ -156,7 +156,7 @@ int dcc_retrieve_results(int net_fd,
                          const char *server_stderr_fname,
                          struct dcc_hostdef *host)
 {
-    unsigned len, uncompr_len;
+    unsigned len, uncompr_len = 0;
     int ret;
     unsigned o_len;
 
