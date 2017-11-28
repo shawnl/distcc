@@ -120,7 +120,8 @@ int dcc_r_result_header(int ifd,
                      " address? Is the server performing authentication and"
                      " your client isn't? Does the server have the compiler"
                      " installed? Is the server configured to access the"
-                     " compiler?");
+                     " compiler? Try running the server with --log-level debug"
+                     " --log-stderr --no-detach.");
         return ret;
 
     if (vers != expect_ver) {
