@@ -8,5 +8,7 @@ ListenStream=0.0.0.0:3632
 Service=distcc.service
 
 [Install]
+#Only distcc.socket or distcc.service can be enabled at the same time,
+#as they contend for the same port.
 WantedBy=sockets.target
 

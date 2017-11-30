@@ -2,7 +2,6 @@
 Description=Distributed C/C++ compiler
 Documentation=man:distccd(1)
 After=network.target
-Requires=distcc.socket
 
 [Service]
 User=distccd
@@ -13,6 +12,10 @@ ProtectHome=true
 PrivateDevices=true
 SystemCallArchitectures=native
 SystemCallFilter=~@clock @cpu-emulation @debug @keyring @module @mount @obsolete @raw-io @reboot @swap
-#Comment these next two lines to allow the service to be run directly (not through socket activateion)
-SystemCallFilter=~@network-io
-SystemCallFilter=accept accept4 setsockopt getsockopt
+#Uncomment these next two lines when using socket activation for a tighter sandbox
+#SystemCallFilter=~@network-io
+#SystemCallFilter=accept accept4 setsockopt getsockopt
+
+[Install]
+WantedBy=multi-user.target
+
