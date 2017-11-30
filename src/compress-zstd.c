@@ -91,14 +91,6 @@ int dcc_compress_file_zstd(int in_fd,
     return ret;
 }
 
-
-/**
- * Send LZO-compressed bulk data.
- *
- * The most straighforward method for miniLZO is to just send everything in
- * one big chunk.  So we just read the whole input into a buffer, build the
- * output in a buffer, and send it once its complete.
- **/
 int dcc_compress_zstd_alloc(const char *in_buf,
                              size_t in_len,
                              char **out_buf_ret,
@@ -152,18 +144,6 @@ int dcc_compress_zstd_alloc(const char *in_buf,
 /**
  * Receive @p in_len compressed bytes from @p in_fd, and write the
  * decompressed form to @p out_fd.
- *
- * There's no way for us to know how big the uncompressed form will be, and
- * there is also no way to grow the decompression buffer if it turns out to
- * initially be too small.  So we assume a ratio of 10x.  If it turns out to
- * be too small, we increase the buffer and try again.  Typical compression of
- * source or object is about 2x to 4x.  On modern Unix we should be able to
- * allocate (and not touch) many megabytes at little cost, since it will just
- * turn into an anonymous map.
- *
- * LZO doesn't have any way to decompress part of the input and then break to
- * get more output space, so our buffer needs to be big enough in the first
- * place or we would waste time repeatedly decompressing it.
  **/
 int dcc_r_bulk_zstd(int out_fd, int in_fd,
                      unsigned in_len, unsigned uncompr_size)
