@@ -56,7 +56,11 @@ int dcc_show_version(const char *prog)
      *
      * Message looks like the one from "gcc --version". */
     printf("%s %s %s\n"
+#ifdef HAVE_ZSTD
+           "  (protocols 1, 2, 3, and 4) (default port %d)\n"
+#else
            "  (protocols 1, 2 and 3) (default port %d)\n"
+#endif
            "  built %s %s\n"
 "Copyright (C) 2002, 2003, 2004 by Martin Pool.\n"
 "Includes miniLZO (C) 1996-2002 by Markus Franz Xaver Johannes Oberhumer.\n"
