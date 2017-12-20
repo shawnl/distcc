@@ -1,0 +1,46 @@
+#!/usr/bin/python
+
+import subprocess, string, os, stat, re
+
+distcc_dir = "/usr/lib/distcc"
+gcc_dir = "/usr/lib/gcc"
+old_symlinks = []
+new_symlinks = []
+standard_names = ["cc", "c++", "c89", "c99"]
+
+
+def consider(name):
+    try:
+        mode = os.stat("/usr/bin/%(name)s" % vars())[stat.ST_MODE]
+        if stat.S_IXUSR & mode:
+            new_symlinks.append(name)
+            print name
+    except:
+        pass
+
+def consider_gcc(prefix, suffix):
+    consider("%(prefix)sgcc%(suffix)s" % vars())
+    consider("%(prefix)sg++%(suffix)s" % vars())
+
+def consider_clang(suffix):
+    consider("clang%(suffix)s" % vars())
+    consider("clang++%(suffix)s" % vars())
+
+for x in standard_names:
+    consider(x)
+
+consider_gcc("", "")
+consider_gcc("c89-", "")
+consider_gcc("c99-", "")
+for gnu_host in os.listdir(gcc_dir):
+    consider_gcc("%(gnu_host)s-" % vars(), "")
+    for version in os.listdir(gcc_dir + "/" + gnu_host):
+        consider_gcc("", "-%(version)s" % vars())
+        consider_gcc("%(gnu_host)s-" % vars(), "-%(version)s" % vars())
+
+consider_clang("")
+for ent in os.listdir("/usr/lib"):
+    if ent.startswith("llvm-"):
+        version = ent.split("-")[1]
+        consider_clang("-%(version)s" % vars())
+
