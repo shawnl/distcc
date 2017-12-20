@@ -176,7 +176,7 @@ if test x"$with_zstd" != xno; then
         AC_MSG_ERROR([Cannot find zstd.h])
     fi
     LIBS="$LIBS -lzstd"
-    CFLAGS="$CFLAGS -DHAVE_ZSTD"
+    CPPFLAGS="$CPPFLAGS -DHAVE_ZSTD"
 fi
 
 dnl Checks for programs
