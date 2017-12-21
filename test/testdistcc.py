@@ -2276,6 +2276,9 @@ if __name__ == '__main__':
     elif sys.argv[1] == "--lzo":
       _server_options = ",lzo"
       del sys.argv[1]
+    elif sys.argv[1] == "--zstd":
+      _server_options = ",zstd"
+      del sys.argv[1]
     elif sys.argv[1] == "--pump":
       _server_options = ",lzo,cpp"
       del sys.argv[1]
