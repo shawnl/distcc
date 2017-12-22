@@ -19,10 +19,10 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301,
  * USA.
  */
-#ifdef HAVE_ZSTD
 
 #include <config.h>
 
+#ifdef HAVE_ZSTD
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
