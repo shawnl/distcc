@@ -202,8 +202,6 @@ int dcc_x_file(int ofd,
 
     if (dcc_open_read(fname, &ifd, &f_size))
         return EXIT_IO_ERROR;
-    if (ifd == -1)
-        return EXIT_IO_ERROR;
     if (f_size_out)
         *f_size_out = f_size;
 
