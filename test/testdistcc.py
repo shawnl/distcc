@@ -29,6 +29,7 @@ Options:
                           with the valgrind command, which defaults to
                           "valgrind --quiet".
   --lzo                   Run the server tests with lzo compression enabled.
+  --zstd                  Run the server tests with Zstandard compression enabled.
   --pump                  Run the server tests with remote preprocessing
                           enabled.
 Example:

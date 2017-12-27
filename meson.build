@@ -7,7 +7,7 @@ project('distcc', 'c',
                 'sysconfdir=/etc',
                 'localstatedir=/var',
         ],
-        meson_version : '>= 0.41',
+        meson_version : '>= 0.44',
        )
 
 conf = configuration_data()
@@ -18,13 +18,6 @@ cc = meson.get_compiler('c')
 # If you use any of these functions you need to write alternate implementations
 # in util.c and add it below under functions to get a HAVE_x macro
 add_global_arguments('-D_GNU_SOURCE', language : 'c')
-
-# Needed by popt/system.h:1 
-add_global_arguments('-DHAVE_CONFIG_H', language : 'c')
-
-add_global_arguments('-DMINILZO_HAVE_CONFIG_H', language : 'c')
-
-pkgconfig = import('pkgconfig')
 
 foreach arg : ['-W',
                '-Wall',
@@ -238,6 +231,10 @@ else
     message('signals return void')
 endif
 ############################################################
+add_global_arguments('-DMINILZO_HAVE_CONFIG_H', language : 'c')
+
+# Needed by popt/system.h:1
+add_global_arguments('-DHAVE_CONFIG_H', language : 'c')
 popt = dependency('popt', required : false)
 conf.set('HAVE_POPT', popt.found(),
         description: 'use system popt')
@@ -245,32 +242,32 @@ conf.set('HAVE_POPT', popt.found(),
 want_gtk = get_option('gtk')
 if want_gtk != 'false'
     gtk = dependency('gtk+-2.0', required : want_gtk == 'true')
-    have =  gtk.found()
-elif
-    have = false
-    gtk = []
+else
+    gtk = disabler()
 endif
-conf.set('WITH_GTK', have, description: 'use GTK+')
+conf.set('WITH_GTK', gtk.found(), description: 'use GTK+')
 
 want_auth = get_option('auth')
 if want_auth != 'false'
     gssapi = dependency('krb5-gssapi', required : want_auth == 'true')
-    have = gssapi.found()
-elif
-    have = false
-    gssapi = []
+else
+    gssapi = disabler()
 endif
-conf.set('HAVE_GSSAPI', have, description: 'use GSSAPI')
+conf.set('HAVE_GSSAPI', gssapi.found(), description: 'use GSSAPI')
 
 want_zeroconf = get_option('zeroconf')
 if want_zeroconf != 'false'
-    avahi = dependency('avahi-client', version : '>= 0.6', required : want_zeroconf == 'true')
-    have = avahi.found()
-elif
-    have = false
-    avahi = []
+    avahi = dependency('avahi', required: want_zeroconf == 'true')
+else
+    avahi = disabler()
 endif
-conf.set('HAVE_AVAHI', have, description : 'use Avahi for Zeroconf/mDNS')
+conf.set('HAVE_AVAHI', avahi.found(), description : 'use Avahi for Zeroconf/mDNS')
+
+zstd = dependency('libzstd',
+    version : '>=1.0',
+    fallback : ['zstd', 'zstd_dep'],
+    default_options: ['legacy_support=false'],)
+conf.set('HAVE_ZSTD', zstd.found(), description : 'use Zstandard for compression')
 
 want_rfc2553 = get_option('rfc2553')
 conf.set10('ENABLE_RFC2553', want_rfc2553,
@@ -282,7 +279,7 @@ conf.set('SYSCONFDIR', format_c_string.format(sysconfdir))
 
 #used by src/mon-gnome.c
 pixmapsdir =  join_paths(get_option('datadir'), 'pixmaps')
-conf.set('PKGDATADIR', format_c_string.format(pixmapsdir))
+conf.set('PKGDATADIR', format_c_string.format(join_paths(prefixdir, pixmapsdir)))
 
 configure_file(
   output: 'config.h',
@@ -303,7 +300,8 @@ lzo_sources = ['lzo/minilzo.c',
       ]
 
 common_sources = ['src/arg.c', 'src/argutil.c',
-    'src/cleanup.c', 'src/compress.c',
+    'src/cleanup.c',
+    'src/compress-lzox1.c', 'src/compress-zstd.c',
     'src/trace.c', 'src/util.c', 'src/io.c', 'src/exec.c',
     'src/rpc.c', 'src/tempfile.c', 'src/bulk.c', 'src/help.c', 'src/filename.c',
     'src/lock.c',
@@ -318,18 +316,19 @@ common_sources = ['src/arg.c', 'src/argutil.c',
     'src/srvrpc.c',
     ]
 
-distcc_sources = ['src/backoff.c',
+#distcc
+common_sources += ['src/backoff.c',
     'src/climasq.c',
     'src/compile.c', 'src/cpp.c',
-    'src/distcc.c',
     'src/remote.c',
     'src/ssh.c', 'src/strip.c',
     'src/timefile.c',
     'src/where.c',
     ]
 
-distccd_sources = ['src/access.c',
-    'src/daemon.c', 'src/dopt.c', 'src/dparent.c', 'src/dsignal.c',
+#distccd
+common_sources += ['src/access.c',
+    'src/dopt.c', 'src/dparent.c', 'src/dsignal.c',
     'src/ncpus.c',
     'src/prefork.c',
     'src/stringmap.c',
@@ -349,13 +348,13 @@ endif
 
 if gssapi.found()
     common_sources += ['src/auth_common.c']
-    distcc_sources += ['src/auth_distcc.c']
-    distccd_sources += ['src/auth_distccd.c']
+    common_sources += ['src/auth_distcc.c']
+    common_sources += ['src/auth_distccd.c']
 endif
 
 if avahi.found()
     common_sources += ['src/zeroconf.c', 'src/gcc-id.c']
-    distccd_sources += ['src/zeroconf-reg.c']
+    common_sources += ['src/zeroconf-reg.c']
 endif
 
 lsdistcc_sources = [
@@ -380,35 +379,57 @@ endif
 minilzo = static_library('minilzo', lzo_sources)
 
 distcc_common = static_library('distcc-common', common_sources,
-        include_directories: includes,)
+    include_directories: includes,
+    dependencies: [
+        zstd,
+    ])
 
-executable('distcc', sources : distcc_sources,
+executable('distcc', sources : 'src/distcc.c',
     include_directories: includes,
-    link_with: [minilzo,
-                 distcc_common,],
-    dependencies: [gssapi, avahi],
+    link_with: [
+        minilzo,
+        distcc_common,
+        ],
+    dependencies: [
+        gssapi,
+        avahi,
+        zstd,
+        ],
     install : true)
-executable('distccd', sources : distccd_sources,
+executable('distccd', sources : 'src/daemon.c',
     include_directories: includes,
     link_with: [minilzo,
-                distcc_common,],
-    dependencies: [popt,gssapi,avahi],
+                distcc_common,
+                ],
+    dependencies: [
+        popt,
+        gssapi,
+        avahi,
+        zstd,
+        ],
     install : true)
 executable('lsdistcc', sources: lsdistcc_sources,
     include_directories: includes,
     link_with: [minilzo,
                 distcc_common],
+    dependencies: [
+        ],
     install: true)
 executable('distccmon-text', sources : distccmon_text_sources,
     include_directories: includes,
     link_with: [distcc_common],
-    dependencies: [popt,],
+    dependencies: [
+        popt,
+        ],
     install: true)
 if gtk.found()
     executable('distccmon-gnome', sources : distccmon_gnome_sources,
         include_directories: includes,
         link_with: [distcc_common],
-        dependencies: [popt, gtk],
+        dependencies: [
+            popt,
+            gtk,
+            ],
         install: true)
 endif
 
@@ -417,9 +438,10 @@ py3_mod = import('python3')
 pump_conf.set('PYTHON', py3_mod.find_python().path())
 pump_conf.set('prefix', get_option('prefix'))
 pump_conf.set('sysconfdir', get_option('sysconfdir'))
-srcdir = 'lib/distcc-pump/include_server/'
-pump_conf.set('srcdir', join_paths(get_option('prefix'), srcdir))
-pump_conf.set('include_server', join_paths(get_option('prefix'), srcdir, 'include_server.py'))
+srcdir = 'lib/distcc-pump'
+pythonsrcdir = join_paths(srcdir, 'include_server')
+pump_conf.set('srcdir', join_paths(get_option('prefix'), pythonsrcdir))
+pump_conf.set('include_server', join_paths(get_option('prefix'), pythonsrcdir, 'include_server.py'))
 configure_file(
     input: 'pump.in',
     output: 'pump',
@@ -433,7 +455,7 @@ include_server = py3_mod.extension_module('distcc_pump_c_extensions',
     link_with: [distcc_common, minilzo],
     dependencies : [py3_dep],
     install: true,
-    install_dir: join_paths(get_option('prefix'), srcdir )
+    install_dir: join_paths(get_option('prefix'), pythonsrcdir )
 )
 ######################################################
 manpages = [
@@ -462,4 +484,23 @@ install_data([
     'include_server/run.py',
     'include_server/setup.py',
     'include_server/statistics.py',
-], install_dir: join_paths(get_option('prefix'), srcdir))
+], install_dir: join_paths(get_option('prefix'), pythonsrcdir))
+######################################################
+executable('h_argvtostr', 'src/h_argvtostr.c', link_with: [distcc_common] )
+executable('h_compile', 'src/h_compile.c', link_with: [distcc_common,minilzo,],)
+executable('h_dotd', 'src/h_dotd.c', link_with: [distcc_common] )
+executable('h_exten', 'src/h_exten.c', link_with: [distcc_common] )
+executable('h_fix_debug_info', 'src/fix_debug_info.c', link_with: [distcc_common],
+    c_args : '-DTEST',)
+executable('h_getline', 'src/h_getline.c', link_with: [distcc_common] )
+executable('h_issource', 'src/h_issource.c', link_with: [distcc_common] )
+executable('h_parsemask', 'src/h_parsemask.c', link_with: [distcc_common])
+executable('h_sa2str', 'src/h_sa2str.c', link_with: [distcc_common])
+executable('h_scanargs', 'src/h_scanargs.c', link_with: [distcc_common])
+executable('h_strip', 'src/h_strip.c', link_with: [distcc_common])
+executable('h_hosts', 'src/h_hosts.c', link_with: [distcc_common])
+
+test('distcc without pump', py3_mod.find_python(), args: ['../test/testdistcc.py'],
+    env: 'PATH=' + meson.build_root() + ':/usr/bin:/bin', timeout: 360, is_parallel: false)
+test('distcc with pump', py3_mod.find_python(), args: ['../test/testdistcc.py', '--pump'],
+    env: 'PATH=' + meson.build_root() + ':/usr/bin:/bin', timeout: 360, is_parallel: false)
