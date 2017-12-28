@@ -167,7 +167,7 @@ AC_ARG_WITH(zstd,
         AC_HELP_STRING([--without-zstd], [build without zstd compression]))
 
 if test x"$with_zstd" != xno; then
-    AC_CHECK_LIB([zstd], [ZSTD_decompressDCtx],
+    PKG_CHECK_MODULES([zstd], [libzstd >= 1],
                  ,
                  AC_MSG_ERROR([Cannot find zstd]))
     AC_CHECK_HEADERS([zstd.h],
