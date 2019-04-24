@@ -53,6 +53,8 @@
 #include <errno.h>
 #include <poll.h>
 #include <signal.h>
+#include <spawn.h>
+#include <signal.h>
 
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -79,14 +81,6 @@
 const int timeout_null_fd = -1;
 int dcc_job_lifetime = 0;
 
-static void dcc_inside_child(char **argv,
-                             const char *stdin_file,
-                             const char *stdout_file,
-                             const char *stderr_file) NORETURN;
-
-
-static void dcc_execvp(char **argv) NORETURN;
-
 void dcc_note_execution(struct dcc_hostdef *host, char **argv)
 {
     char *astr;
@@ -96,41 +90,6 @@ void dcc_note_execution(struct dcc_hostdef *host, char **argv)
            host->hostdef_string, astr);
     free(astr);
 }
-
-
-/**
- * Redirect stdin/out/err.  Filenames may be NULL to leave them untouched.
- *
- * This is called when running a job remotely, but *not* when running
- * it locally, because people might e.g. want cpp to read from stdin.
- **/
-int dcc_redirect_fds(const char *stdin_file,
-                     const char *stdout_file,
-                     const char *stderr_file)
-{
-    int ret;
-
-    if (stdin_file)
-        if ((ret = dcc_redirect_fd(STDIN_FILENO, stdin_file, O_RDONLY)))
-            return ret;
-
-    if (stdout_file) {
-        if ((ret = dcc_redirect_fd(STDOUT_FILENO, stdout_file,
-                                   O_WRONLY | O_CREAT | O_TRUNC)))
-            return ret;
-    }
-
-    if (stderr_file) {
-        /* Open in append mode, because the server will dump its own error
-         * messages into the compiler's error file.  */
-        if ((ret = dcc_redirect_fd(STDERR_FILENO, stderr_file,
-                                   O_WRONLY | O_CREAT | O_APPEND)))
-            return ret;
-    }
-
-    return 0;
-}
-
 
 #ifdef __CYGWIN__
 /* Execute a process WITHOUT console window and correctly redirect output. */
@@ -271,80 +230,6 @@ static void dcc_execvp(char **argv)
     dcc_exit(EXIT_COMPILER_MISSING); /* a generalization, i know */
 }
 
-
-
-/**
- * Called inside the newly-spawned child process to execute a command.
- * Either executes it, or returns an appropriate error.
- *
- * This routine also takes a lock on localhost so that it's counted
- * against the process load.  That lock will go away when the process
- * exits.
- *
- * In this current version locks are taken without regard to load limitation
- * on the current machine.  The main impact of this is that cpp running on
- * localhost will cause jobs to be preferentially distributed away from
- * localhost, but it should never cause the machine to deadlock waiting for
- * localhost slots.
- *
- * @param what Type of process to be run here (cpp, cc, ...)
- **/
-static void dcc_inside_child(char **argv,
-                             const char *stdin_file,
-                             const char *stdout_file,
-                             const char *stderr_file)
-{
-    int ret;
-
-    if ((ret = dcc_ignore_sigpipe(0)))
-        goto fail;              /* set handler back to default */
-
-    /* Ignore failure */
-    dcc_increment_safeguard();
-
-#ifdef __CYGWIN__
-    /* This will execute compiler and CORRECTLY redirect output if compiler is
-     * a native Windows application.  If this never returns, it means the
-     * compiler-execute succeeded.  We use a hack to decide if it's a windows
-     * application: if argv[0] starts with "<letter>:" or with "\\", then it's
-     * a windows path and we try dcc_execvp_cyg.  If not, we assume it's a
-     * cygwin app and fall through to the unix-style forking, below.  If we
-     * guess wrong, dcc_execvp_cyg will probably fail with error 3
-     * (windows-exe for "path not found"), so again we'll fall through to the
-     * unix-fork case.  Otherwise we just fail in a generic way.
-     * TODO(csilvers): Figure out the right way to deal with this.  Running
-     *                 cygwin apps via dcc_execvp_cyg segfaults (and takes a
-     *                 long time to do it too), so I want to avoid that if
-     *                 possible.  I don't know enough about cygwin or
-     *                 cygwin/windows interactions to know the right thing to
-     *                 do here.  Until distcc has cl.exe support, this may
-     *                 all be a moot point anyway.
-     */
-    if (argv[0] && ((argv[0][0] != '\0' && argv[0][1] == ':') ||
-                    (argv[0][0] == '\\' && argv[0][1] == '\\'))) {
-        DWORD status;
-        status = dcc_execvp_cyg(argv, stdin_file, stdout_file, stderr_file);
-        if (status != 3) {
-            ret = EXIT_DISTCC_FAILED;
-            goto fail;
-        }
-    }
-#endif
-
-    /* do this last, so that any errors from previous operations are
-     * visible */
-    if ((ret = dcc_redirect_fds(stdin_file, stdout_file, stderr_file)))
-        goto fail;
-
-    dcc_execvp(argv);
-
-    ret = EXIT_DISTCC_FAILED;
-
-    fail:
-    dcc_exit(ret);
-}
-
-
 int dcc_new_pgrp(void)
 {
     /* If we're a session group leader, then we are not able to call
@@ -382,35 +267,63 @@ int dcc_spawn_child(char **argv, pid_t *pidptr,
                     const char *stdout_file,
                     const char *stderr_file)
 {
-    pid_t pid;
+    posix_spawn_file_actions_t actions;
+    posix_spawnattr_t spawnattr;
+    sigset_t set;
+    int r;
 
-    dcc_trace_argv("forking to execute", argv);
+    dcc_trace_argv("using posix_spawn:", argv);
 
-    pid = fork();
-    if (pid == -1) {
-        rs_log_error("failed to fork: %s", strerror(errno));
-        return EXIT_OUT_OF_MEMORY; /* probably */
-    } else if (pid == 0) {
-        /* If this is a remote compile,
-         * put the child in a new group, so we can
-         * kill it and all its descendents without killing distccd
-         * FIXME: if you kill distccd while it's compiling, and
-         * the compiler has an infinite loop bug, the new group
-         * will run forever until you kill it.
-         */
-        if (stdout_file != NULL) {
-            if (dcc_new_pgrp() != 0)
-                rs_trace("Unable to start a new group\n");
+    if (stdin_file) {
+        r = posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, stdin_file, O_RDONLY, 0);
+        if (r < 0) {
+            rs_log_error("failed in posix_spawn: %s", strerror(errno));
+            return EXIT_DISTCC_FAILED;
         }
-        dcc_inside_child(argv, stdin_file, stdout_file, stderr_file);
-        /* !! NEVER RETURN FROM HERE !! */
-    } else {
-        *pidptr = pid;
-        rs_trace("child started as pid%d", (int) pid);
-        return 0;
     }
+    if (stdout_file) {
+        r = posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, stdout_file, O_WRONLY | O_CREAT | O_TRUNC, 0);
+        if (r < 0) {
+            rs_log_error("failed in posix_spawn: %s", strerror(errno));
+            return EXIT_DISTCC_FAILED;
+        }
+    }
+    if (stderr_file) {
+        /* Open in append mode, because the server will dump its own error
+         * messages into the compiler's error file.  */
+        r = posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, stderr_file, O_WRONLY | O_CREAT | O_APPEND, 0);
+        if (r < 0) {
+            rs_log_error("failed in posix_spawn: %s", strerror(errno));
+            return EXIT_DISTCC_FAILED;
+        }
+    }
+    r = posix_spawnattr_getflags(&actions, POSIX_SPAWN_SETSIGMASK);
+    if (r < 0) {
+        rs_log_error("failed in posix_spawn: %s", strerror(errno));
+        return EXIT_DISTCC_FAILED;
+    }
+    r = sigemptyset(&set);
+    if (r < 0) {
+        rs_log_error("failed in posix_spawn: %s", strerror(errno));
+        return EXIT_DISTCC_FAILED;
+    }
+    r = sigaddset(&set, SIGPIPE);
+    if (r < 0) {
+        rs_log_error("failed in posix_spawn: %s", strerror(errno));
+        return EXIT_DISTCC_FAILED;
+    }
+    r = posix_spawnattr_setsigmask(&actions, &set);
+    if (r < 0) {
+        rs_log_error("failed in posix_spawn: %s", strerror(errno));
+        return EXIT_DISTCC_FAILED;
+    }
+    r = posix_spawn(pidptr, argv[0], &actions, NULL, argv, NULL);
+    if (r < 0) {
+        rs_log_error("failed in posix_spawn: %s", strerror(errno));
+        return EXIT_DISTCC_FAILED;
+    }
+    return 0;
 }
-
 
 void dcc_reset_signal(int whichsig)
 {
